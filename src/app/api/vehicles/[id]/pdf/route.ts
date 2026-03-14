@@ -19,9 +19,6 @@ const DARK   = '#111827'
 const GRAY   = '#6b7280'
 const LIGHT  = '#f3f4f6'
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
-}
 function formatDate(str: string | null): string {
   if (!str) return '—'
   return new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(str))
