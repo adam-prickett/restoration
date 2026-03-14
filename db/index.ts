@@ -75,24 +75,17 @@ db.exec(`
   );
 `)
 
-// Migrations
-const docCols = (db.prepare(`PRAGMA table_info(vehicle_documents)`).all() as { name: string }[]).map(c => c.name)
-if (docCols.length && !docCols.includes('title')) {
-  db.exec(`ALTER TABLE vehicle_documents ADD COLUMN title TEXT`)
-}
-
-const vehicleCols = (db.prepare(`PRAGMA table_info(vehicles)`).all() as { name: string }[]).map(c => c.name)
-if (vehicleCols.length && !vehicleCols.includes('budget')) {
-  db.exec(`ALTER TABLE vehicles ADD COLUMN budget REAL`)
-}
-if (vehicleCols.length && !vehicleCols.includes('registration')) {
-  db.exec(`ALTER TABLE vehicles ADD COLUMN registration TEXT`)
-}
-if (vehicleCols.length && !vehicleCols.includes('actual_sale_price')) {
-  db.exec(`ALTER TABLE vehicles ADD COLUMN actual_sale_price REAL`)
-}
-if (vehicleCols.length && !vehicleCols.includes('sold_date')) {
-  db.exec(`ALTER TABLE vehicles ADD COLUMN sold_date TEXT`)
+// Migrations — wrapped in try/catch so they are safe to run multiple times
+// (Next.js may bundle db/index.ts into several chunks, each initialising the module)
+const migrations = [
+  `ALTER TABLE vehicle_documents ADD COLUMN title TEXT`,
+  `ALTER TABLE vehicles ADD COLUMN budget REAL`,
+  `ALTER TABLE vehicles ADD COLUMN registration TEXT`,
+  `ALTER TABLE vehicles ADD COLUMN actual_sale_price REAL`,
+  `ALTER TABLE vehicles ADD COLUMN sold_date TEXT`,
+]
+for (const sql of migrations) {
+  try { db.exec(sql) } catch { /* column already exists */ }
 }
 
 export default db
