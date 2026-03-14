@@ -34,3 +34,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# app data
+/db/restoration.db
+/public/uploads/receipts/*
+!/public/uploads/receipts/.gitkeep
+/public/uploads/documents/*
+!/public/uploads/documents/.gitkeep

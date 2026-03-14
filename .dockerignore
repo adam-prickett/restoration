@@ -1,0 +1,7 @@
+node_modules
+.next
+.git
+.claude
+db/restoration.db
+public/uploads/receipts/*
+public/uploads/documents/*
