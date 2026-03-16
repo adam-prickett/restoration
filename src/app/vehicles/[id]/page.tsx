@@ -989,12 +989,16 @@ function SellModal({ vehicle, onClose, onSave }: { vehicle: Vehicle; onClose: ()
 }
 
 function PdfModal({ vehicleId, currency, onClose }: { vehicleId: string; currency: string; onClose: () => void }) {
-  const [hideCosts, setHideCosts] = useState(false)
+  const [costOption, setCostOption] = useState<'all' | 'hideSummary' | 'hideAll'>('all')
   const [generating, setGenerating] = useState(false)
 
   async function handleGenerate() {
     setGenerating(true)
-    const params = new URLSearchParams({ hideCosts: String(hideCosts), currency })
+    const params = new URLSearchParams({
+      hideSummary: String(costOption === 'hideSummary' || costOption === 'hideAll'),
+      hideCosts: String(costOption === 'hideAll'),
+      currency,
+    })
     const res = await fetch(`/api/vehicles/${vehicleId}/pdf?${params}`)
     const blob = await res.blob()
     const url = URL.createObjectURL(blob)
@@ -1011,15 +1015,25 @@ function PdfModal({ vehicleId, currency, onClose }: { vehicleId: string; currenc
     <Modal onClose={onClose}>
       <h2 className="text-lg font-bold mb-4">Export PDF</h2>
       <div className="space-y-4">
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={hideCosts}
-            onChange={(e) => setHideCosts(e.target.checked)}
-            className="w-4 h-4 rounded accent-amber-500"
-          />
-          <span className="text-sm text-gray-300">Hide all costs and financial summary</span>
-        </label>
+        <div className="space-y-2">
+          {([
+            ['all',         'Show all costs'],
+            ['hideSummary', 'Hide financial summary (keep individual prices)'],
+            ['hideAll',     'Hide all costs'],
+          ] as const).map(([value, label]) => (
+            <label key={value} className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="radio"
+                name="costOption"
+                value={value}
+                checked={costOption === value}
+                onChange={() => setCostOption(value)}
+                className="accent-amber-500"
+              />
+              <span className="text-sm text-gray-300">{label}</span>
+            </label>
+          ))}
+        </div>
         <p className="text-xs text-gray-500">
           The PDF will include vehicle details, all purchases, and the parts wishlist.
         </p>

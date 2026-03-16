@@ -26,8 +26,9 @@ function formatDate(str: string | null): string {
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const { searchParams } = new URL(request.url)
-  const hideCosts = searchParams.get('hideCosts') === 'true'
-  const currency  = searchParams.get('currency') || 'USD'
+  const hideSummary = searchParams.get('hideSummary') === 'true'
+  const hideCosts   = searchParams.get('hideCosts') === 'true'
+  const currency    = searchParams.get('currency') || 'USD'
 
   const vehicle = db.prepare('SELECT * FROM vehicles WHERE id = ?').get(params.id) as Vehicle | undefined
   if (!vehicle) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -90,7 +91,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
     }
 
     // ── Financial summary (unless hidden) ──
-    if (!hideCosts) {
+    if (!hideSummary) {
       doc.rect(50, y, doc.page.width - 100, 1).fill('#e5e7eb')
       y += 10
 
