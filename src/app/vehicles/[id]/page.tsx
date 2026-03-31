@@ -40,6 +40,7 @@ export default function VehicleDetail() {
   const [showAddPurchase, setShowAddPurchase] = useState(false)
   const [editingPart, setEditingPart] = useState<PartRequired | null>(null)
   const [editingPurchase, setEditingPurchase] = useState<(Purchase & { receipts: Receipt[] }) | null>(null)
+  const [movingPartToPurchased, setMovingPartToPurchased] = useState<PartRequired | null>(null)
   const [showPdfModal, setShowPdfModal] = useState(false)
   const [showSellModal, setShowSellModal] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
@@ -461,6 +462,9 @@ export default function VehicleDetail() {
                       <option value="ordered">Ordered</option>
                       <option value="received">Received</option>
                     </select>
+                    <button onClick={() => setMovingPartToPurchased(p)} className="text-xs text-green-600 hover:text-green-400">
+                      Purchased
+                    </button>
                     <button onClick={() => setEditingPart(p)} className="text-xs text-gray-500 hover:text-gray-300">
                       Edit
                     </button>
@@ -517,6 +521,16 @@ export default function VehicleDetail() {
           purchase={editingPurchase}
           onClose={() => { setShowAddPurchase(false); setEditingPurchase(null) }}
           onSave={() => { setShowAddPurchase(false); setEditingPurchase(null); load() }}
+        />
+      )}
+
+      {/* Move Part to Purchased Modal */}
+      {movingPartToPurchased && (
+        <MoveToPurchasedModal
+          vehicleId={id}
+          part={movingPartToPurchased}
+          onClose={() => setMovingPartToPurchased(null)}
+          onSave={() => { setMovingPartToPurchased(null); load() }}
         />
       )}
 
@@ -786,6 +800,108 @@ function PurchaseModal({
           <button type="submit" disabled={saving}
             className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold px-4 py-2 rounded-lg text-sm">
             {saving ? 'Saving...' : 'Save'}
+          </button>
+          <button type="button" onClick={onClose}
+            className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-gray-200 border border-gray-700">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function MoveToPurchasedModal({
+  vehicleId,
+  part,
+  onClose,
+  onSave,
+}: {
+  vehicleId: string
+  part: PartRequired
+  onClose: () => void
+  onSave: () => void
+}) {
+  const [form, setForm] = useState({
+    description: part.description,
+    part_number: part.part_number || '',
+    actual_cost: part.estimated_cost?.toString() || '',
+    vendor: '',
+    purchase_date: '',
+    category: 'part',
+    notes: part.notes || '',
+  })
+  const [saving, setSaving] = useState(false)
+  const { currency } = useCurrency()
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
+    setForm({ ...form, [e.target.name]: e.target.value })
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    const fd = new FormData()
+    Object.entries(form).forEach(([k, v]) => fd.append(k, v))
+    fd.set('actual_cost', (parseFloat(form.actual_cost) || 0).toString())
+    await fetch(`/api/vehicles/${vehicleId}/purchases`, { method: 'POST', body: fd })
+    await fetch(`/api/parts-required/${part.id}`, { method: 'DELETE' })
+    onSave()
+  }
+
+  return (
+    <Modal onClose={onClose}>
+      <h2 className="text-lg font-bold mb-1">Move to Purchased</h2>
+      <p className="text-sm text-gray-400 mb-4">This will create a purchase record and remove the part from your wishlist.</p>
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div>
+          <label className="block text-sm text-gray-400 mb-1">Description *</label>
+          <input name="description" value={form.description} onChange={handleChange} required autoFocus
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Part Number</label>
+            <input name="part_number" value={form.part_number} onChange={handleChange}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Actual Cost ({getCurrencySymbol(currency)}) *</label>
+            <input name="actual_cost" type="number" step="0.01" value={form.actual_cost} onChange={handleChange} required
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Vendor</label>
+            <input name="vendor" value={form.vendor} onChange={handleChange}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Date</label>
+            <input name="purchase_date" type="date" value={form.purchase_date} onChange={handleChange}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm text-gray-400 mb-1">Category</label>
+          <select name="category" value={form.category} onChange={handleChange}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500">
+            <option value="part">Part</option>
+            <option value="service">Service</option>
+            <option value="labor">Labor</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm text-gray-400 mb-1">Notes</label>
+          <textarea name="notes" value={form.notes} onChange={handleChange} rows={2}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500 resize-none" />
+        </div>
+        <div className="flex gap-3 pt-1">
+          <button type="submit" disabled={saving}
+            className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-lg text-sm">
+            {saving ? 'Moving...' : 'Move to Purchased'}
           </button>
           <button type="button" onClick={onClose}
             className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-gray-200 border border-gray-700">
