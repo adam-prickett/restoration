@@ -41,6 +41,7 @@ export default function VehicleDetail() {
   const [editingPart, setEditingPart] = useState<PartRequired | null>(null)
   const [editingPurchase, setEditingPurchase] = useState<(Purchase & { receipts: Receipt[] }) | null>(null)
   const [movingPartToPurchased, setMovingPartToPurchased] = useState<PartRequired | null>(null)
+  const [showBulkAddPurchase, setShowBulkAddPurchase] = useState(false)
   const [showPdfModal, setShowPdfModal] = useState(false)
   const [showSellModal, setShowSellModal] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
@@ -349,7 +350,13 @@ export default function VehicleDetail() {
       {/* Purchases Tab */}
       {tab === 'purchases' && (
         <div>
-          <div className="flex justify-end mb-3">
+          <div className="flex justify-end gap-2 mb-3">
+            <button
+              onClick={() => setShowBulkAddPurchase(true)}
+              className="border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white font-medium px-4 py-2 rounded-lg text-sm"
+            >
+              Bulk Add
+            </button>
             <button
               onClick={() => setShowAddPurchase(true)}
               className="bg-amber-500 hover:bg-amber-400 text-black font-semibold px-4 py-2 rounded-lg text-sm"
@@ -455,16 +462,19 @@ export default function VehicleDetail() {
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <select
                       value={p.status}
-                      onChange={(e) => updatePartStatus(p, e.target.value)}
+                      onChange={(e) => {
+                        if (e.target.value === 'received') {
+                          setMovingPartToPurchased(p)
+                        } else {
+                          updatePartStatus(p, e.target.value)
+                        }
+                      }}
                       className={`text-xs px-2 py-1 rounded-full border-0 font-medium cursor-pointer focus:outline-none ${STATUS_COLORS[p.status]}`}
                     >
                       <option value="needed">Needed</option>
                       <option value="ordered">Ordered</option>
                       <option value="received">Received</option>
                     </select>
-                    <button onClick={() => setMovingPartToPurchased(p)} className="text-xs text-green-600 hover:text-green-400">
-                      Purchased
-                    </button>
                     <button onClick={() => setEditingPart(p)} className="text-xs text-gray-500 hover:text-gray-300">
                       Edit
                     </button>
@@ -511,6 +521,15 @@ export default function VehicleDetail() {
           part={editingPart}
           onClose={() => { setShowAddPart(false); setEditingPart(null) }}
           onSave={() => { setShowAddPart(false); setEditingPart(null); load() }}
+        />
+      )}
+
+      {/* Bulk Add Purchases Modal */}
+      {showBulkAddPurchase && (
+        <BulkAddPurchasesModal
+          vehicleId={id}
+          onClose={() => setShowBulkAddPurchase(false)}
+          onSave={() => { setShowBulkAddPurchase(false); load() }}
         />
       )}
 
@@ -808,6 +827,175 @@ function PurchaseModal({
         </div>
       </form>
     </Modal>
+  )
+}
+
+function BulkAddPurchasesModal({
+  vehicleId,
+  onClose,
+  onSave,
+}: {
+  vehicleId: string
+  onClose: () => void
+  onSave: () => void
+}) {
+  type LineItem = {
+    description: string
+    part_number: string
+    actual_cost: string
+    notes: string
+  }
+
+  const emptyItem = (): LineItem => ({ description: '', part_number: '', actual_cost: '', notes: '' })
+
+  const [shared, setShared] = useState({ vendor: '', purchase_date: '', category: 'part' })
+  const [items, setItems] = useState<LineItem[]>([emptyItem()])
+  const [saving, setSaving] = useState(false)
+  const { currency } = useCurrency()
+
+  function handleSharedChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
+    setShared({ ...shared, [e.target.name]: e.target.value })
+  }
+
+  function handleItemChange(index: number, e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
+    const updated = items.map((item, i) => i === index ? { ...item, [e.target.name]: e.target.value } : item)
+    setItems(updated)
+  }
+
+  function addRow() {
+    setItems([...items, emptyItem()])
+  }
+
+  function removeRow(index: number) {
+    setItems(items.filter((_, i) => i !== index))
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    await fetch(`/api/vehicles/${vehicleId}/purchases/bulk`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        vendor: shared.vendor,
+        purchase_date: shared.purchase_date,
+        category: shared.category,
+        items: items.map((item) => ({
+          description: item.description,
+          part_number: item.part_number,
+          actual_cost: parseFloat(item.actual_cost) || 0,
+          notes: item.notes,
+        })),
+      }),
+    })
+    onSave()
+  }
+
+  return (
+    <dialog
+      ref={(el) => el?.showModal()}
+      onClose={onClose}
+      onClick={(e) => { if ((e.target as HTMLElement).tagName === 'DIALOG') onClose() }}
+      className="m-auto rounded-xl p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-gray-900 border border-gray-700 text-gray-100 backdrop:bg-black/60"
+    >
+      <h2 className="text-lg font-bold mb-1">Bulk Add Purchases</h2>
+      <p className="text-sm text-gray-400 mb-4">Add multiple items from an invoice — they will share the same vendor and date.</p>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Shared fields */}
+        <div className="grid grid-cols-3 gap-3 p-3 bg-gray-800 rounded-lg">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Vendor</label>
+            <input name="vendor" value={shared.vendor} onChange={handleSharedChange}
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Date</label>
+            <input name="purchase_date" type="date" value={shared.purchase_date} onChange={handleSharedChange}
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1">Default Category</label>
+            <select name="category" value={shared.category} onChange={handleSharedChange}
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500">
+              <option value="part">Part</option>
+              <option value="service">Service</option>
+              <option value="labor">Labor</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Line items */}
+        <div className="space-y-2">
+          <div className="grid grid-cols-[1fr_120px_100px_auto] gap-2 px-1">
+            <span className="text-xs text-gray-500">Description *</span>
+            <span className="text-xs text-gray-500">Part Number</span>
+            <span className="text-xs text-gray-500">Cost ({getCurrencySymbol(currency)})</span>
+            <span />
+          </div>
+          {items.map((item, index) => (
+            <div key={index} className="grid grid-cols-[1fr_120px_100px_auto] gap-2 items-center">
+              <input
+                name="description"
+                value={item.description}
+                onChange={(e) => handleItemChange(index, e)}
+                required
+                placeholder="Description"
+                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+              />
+              <input
+                name="part_number"
+                value={item.part_number}
+                onChange={(e) => handleItemChange(index, e)}
+                placeholder="Optional"
+                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+              />
+              <input
+                name="actual_cost"
+                type="number"
+                step="0.01"
+                min="0"
+                value={item.actual_cost}
+                onChange={(e) => handleItemChange(index, e)}
+                placeholder="0.00"
+                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+              />
+              <button
+                type="button"
+                onClick={() => removeRow(index)}
+                disabled={items.length === 1}
+                className="text-gray-600 hover:text-red-400 disabled:opacity-30 px-2 text-lg leading-none"
+                title="Remove row"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={addRow}
+          className="text-sm text-amber-500 hover:text-amber-400"
+        >
+          + Add row
+        </button>
+
+        <div className="flex items-center justify-between pt-1 border-t border-gray-800">
+          <span className="text-sm text-gray-500">{items.length} item{items.length !== 1 ? 's' : ''}</span>
+          <div className="flex gap-3">
+            <button type="submit" disabled={saving}
+              className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold px-4 py-2 rounded-lg text-sm">
+              {saving ? 'Saving...' : `Save ${items.length} item${items.length !== 1 ? 's' : ''}`}
+            </button>
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 rounded-lg text-sm text-gray-400 hover:text-gray-200 border border-gray-700">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </form>
+    </dialog>
   )
 }
 
